@@ -29,7 +29,7 @@ const Expenses = () => {
 
     const fetchExpenses = () => {
         setLoading(true);
-        axios.get('http://localhost:5000/api/expenses', { headers: { Authorization: `Bearer ${user.token}` } })
+        axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses', { headers: { Authorization: `Bearer ${user.token}` } })
             .then(res => { setExpenses(res.data); setLoading(false); })
             .catch(err => { console.error(err); setLoading(false); });
     };
@@ -40,12 +40,12 @@ const Expenses = () => {
         e.preventDefault();
         try {
             if (editingId) {
-                const res = await axios.put(`http://localhost:5000/api/expenses/${editingId}`, formData, { headers: { Authorization: `Bearer ${user.token}` } });
+                const res = await axios.put(`' + import.meta.env.VITE_API_URL || 'http://localhost:5000'/api/expenses/${editingId}`, formData, { headers: { Authorization: `Bearer ${user.token}` } });
                 setExpenses(expenses.map(exp => exp._id === editingId ? res.data : exp));
                 toast.success('Vector sequence synchronized!');
                 setEditingId(null);
             } else {
-                const res = await axios.post('http://localhost:5000/api/expenses', formData, { headers: { Authorization: `Bearer ${user.token}` } });
+                const res = await axios.post(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses', formData, { headers: { Authorization: `Bearer ${user.token}` } });
                 setExpenses([res.data, ...expenses]);
                 toast.success('Matrix entry recorded!');
             }
@@ -58,7 +58,7 @@ const Expenses = () => {
     const executeDelete = async () => {
         if (!selectedToDelete) return;
         try {
-            await axios.delete(`http://localhost:5000/api/expenses/${selectedToDelete}`, { headers: { Authorization: `Bearer ${user.token}` } });
+            await axios.delete(`' + import.meta.env.VITE_API_URL || 'http://localhost:5000'/api/expenses/${selectedToDelete}`, { headers: { Authorization: `Bearer ${user.token}` } });
             setExpenses(expenses.filter(e => e._id !== selectedToDelete));
             toast.success('Data node permanently purged.');
             setDeleteModalOpen(false);

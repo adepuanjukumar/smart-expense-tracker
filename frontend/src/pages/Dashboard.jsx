@@ -17,8 +17,8 @@ const Dashboard = () => {
     useEffect(() => {
         if (user) {
             Promise.all([
-                axios.get('http://localhost:5000/api/expenses', { headers: { Authorization: `Bearer ${user.token}` } }),
-                axios.get('http://localhost:5000/api/income', { headers: { Authorization: `Bearer ${user.token}` } })
+                axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses', { headers: { Authorization: `Bearer ${user.token}` } }),
+                axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/income', { headers: { Authorization: `Bearer ${user.token}` } })
             ]).then(([expRes, incRes]) => {
                 setExpenses(expRes.data);
                 setIncomes(incRes.data);
