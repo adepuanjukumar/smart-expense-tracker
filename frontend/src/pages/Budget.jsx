@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import API_BASE from '../utils/api';
 import { toast } from 'react-toastify';
 import Spinner from '../components/Spinner';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -17,8 +18,8 @@ const Budget = () => {
     useEffect(() => {
         if (user) {
             Promise.all([
-                axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/budget', { headers: { Authorization: `Bearer ${user.token}` } }),
-                axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses', { headers: { Authorization: `Bearer ${user.token}` } })
+                axios.get(`${API_BASE}/api/budget`, { headers: { Authorization: `Bearer ${user.token}` } }),
+                axios.get(`${API_BASE}/api/expenses`, { headers: { Authorization: `Bearer ${user.token}` } })
             ]).then(([budRes, expRes]) => {
                 if (budRes.data.length > 0) setBudget(budRes.data[0]);
                 // Calculate total spent strictly during this specific active month
@@ -39,7 +40,7 @@ const Budget = () => {
         try {
             const currentMonth = new Date().getMonth() + 1;
             const currentYear = new Date().getFullYear();
-            const res = await axios.post(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/budget', {
+            const res = await axios.post(`${API_BASE}/api/budget`, {
                 monthlyBudget: amount, month: currentMonth, year: currentYear
             }, { headers: { Authorization: `Bearer ${user.token}` } });
             setBudget(res.data);

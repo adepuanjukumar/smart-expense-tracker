@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE from '../utils/api';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { formatCurrency } from '../utils/formatCurrency';
 import { TrendingUp, TrendingDown, Wallet, ArrowRight, Activity } from 'lucide-react';
@@ -17,8 +18,8 @@ const Dashboard = () => {
     useEffect(() => {
         if (user) {
             Promise.all([
-                axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses', { headers: { Authorization: `Bearer ${user.token}` } }),
-                axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/income', { headers: { Authorization: `Bearer ${user.token}` } })
+                axios.get(`${API_BASE}/api/expenses`, { headers: { Authorization: `Bearer ${user.token}` } }),
+                axios.get(`${API_BASE}/api/income`, { headers: { Authorization: `Bearer ${user.token}` } })
             ]).then(([expRes, incRes]) => {
                 setExpenses(expRes.data);
                 setIncomes(incRes.data);

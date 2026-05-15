@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import API_BASE from '../utils/api';
 import { toast } from 'react-toastify';
 import Spinner from '../components/Spinner';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -28,7 +29,7 @@ const Income = () => {
 
     const fetchIncome = () => {
         setLoading(true);
-        axios.get(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/income', { headers: { Authorization: `Bearer ${user.token}` } })
+        axios.get(`${API_BASE}/api/income`, { headers: { Authorization: `Bearer ${user.token}` } })
             .then(res => { setIncomes(res.data); setLoading(false); })
             .catch(err => { console.error(err); setLoading(false); });
     };
@@ -39,12 +40,12 @@ const Income = () => {
         e.preventDefault();
         try {
             if (editingId) {
-                const res = await axios.put(`' + import.meta.env.VITE_API_URL || 'http://localhost:5000'/api/income/${editingId}`, formData, { headers: { Authorization: `Bearer ${user.token}` } });
+                const res = await axios.put(`${API_BASE}/api/income/${editingId}`, formData, { headers: { Authorization: `Bearer ${user.token}` } });
                 setIncomes(incomes.map(inc => inc._id === editingId ? res.data : inc));
                 toast.success('Income successfully modified!');
                 setEditingId(null);
             } else {
-                const res = await axios.post(${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/income', formData, { headers: { Authorization: `Bearer ${user.token}` } });
+                const res = await axios.post(`${API_BASE}/api/income`, formData, { headers: { Authorization: `Bearer ${user.token}` } });
                 setIncomes([res.data, ...incomes]);
                 toast.success('New Income logged!');
             }
@@ -57,7 +58,7 @@ const Income = () => {
     const executeDelete = async () => {
         if (!selectedToDelete) return;
         try {
-            await axios.delete(`' + import.meta.env.VITE_API_URL || 'http://localhost:5000'/api/income/${selectedToDelete}`, { headers: { Authorization: `Bearer ${user.token}` } });
+            await axios.delete(`${API_BASE}/api/income/${selectedToDelete}`, { headers: { Authorization: `Bearer ${user.token}` } });
             setIncomes(incomes.filter(i => i._id !== selectedToDelete));
             toast.success('Income record purged.');
             setDeleteModalOpen(false);
