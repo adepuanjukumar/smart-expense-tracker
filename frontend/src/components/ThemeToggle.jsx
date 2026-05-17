@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 const ThemeToggle = () => {
     const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
@@ -15,14 +14,17 @@ const ThemeToggle = () => {
     }, [theme]);
 
     return (
-        <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors shadow-sm"
+        <button
+            onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+            className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
         >
-            {theme === 'light' ? <Moon size={18} className="text-slate-600" /> : <Sun size={18} className="text-yellow-400" />}
-        </motion.button>
+            {theme === 'light'
+                ? <Moon size={18} className="text-slate-500" />
+                : <Sun size={18} className="text-amber-400" />
+            }
+        </button>
     );
 };
+
 export default ThemeToggle;

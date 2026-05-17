@@ -3,30 +3,44 @@ import { useSelector } from 'react-redux';
 import axios from 'axios';
 import API_BASE from '../utils/api';
 import { toast } from 'react-toastify';
-import Spinner from '../components/Spinner';
 import { formatCurrency } from '../utils/formatCurrency';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Download, Trash2, Edit2, Plus, Sparkles } from 'lucide-react';
+import { Search, Filter, Download, Trash2, Edit2, Plus, X, Receipt, SlidersHorizontal, TrendingDown } from 'lucide-react';
 import { CSVLink } from 'react-csv';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+const CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Others'];
+const PAYMENT_METHODS = ['Card', 'Cash', 'Bank Transfer'];
+
+const CAT_STYLES = {
+    Food: 'bg-purple-100/80 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    Travel: 'bg-blue-100/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    Shopping: 'bg-amber-100/80 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    Bills: 'bg-red-100/80 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    Entertainment: 'bg-pink-100/80 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
+    Health: 'bg-emerald-100/80 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    Education: 'bg-cyan-100/80 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+    Others: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+};
+
+const SkeletonRow = () => (
+    <tr><td colSpan={6} className="px-4 py-3.5"><div className="skeleton h-4 w-full rounded" /></td></tr>
+);
+
 const Expenses = () => {
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
-
     const [formData, setFormData] = useState({ title: '', amount: '', category: 'Food', date: '', paymentMethod: 'Card' });
     const [editingId, setEditingId] = useState(null);
-
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('All');
     const [sortBy, setSortBy] = useState('Latest');
-
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [selectedToDelete, setSelectedToDelete] = useState(null);
-
-    const { user } = useSelector(state => state.auth);
+    const [deleteModal, setDeleteModal] = useState({ open: false, id: null });
+    const [showForm, setShowForm] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
     const tableRef = useRef(null);
+    const { user } = useSelector(state => state.auth);
 
     const fetchExpenses = () => {
         setLoading(true);
@@ -42,204 +56,267 @@ const Expenses = () => {
         try {
             if (editingId) {
                 const res = await axios.put(`${API_BASE}/api/expenses/${editingId}`, formData, { headers: { Authorization: `Bearer ${user.token}` } });
-                setExpenses(expenses.map(exp => exp._id === editingId ? res.data : exp));
-                toast.success('Vector sequence synchronized!');
+                setExpenses(expenses.map(x => x._id === editingId ? res.data : x));
+                toast.success('Expense updated!');
                 setEditingId(null);
             } else {
                 const res = await axios.post(`${API_BASE}/api/expenses`, formData, { headers: { Authorization: `Bearer ${user.token}` } });
                 setExpenses([res.data, ...expenses]);
-                toast.success('Matrix entry recorded!');
+                toast.success('Expense added!');
             }
             setFormData({ title: '', amount: '', category: 'Food', date: '', paymentMethod: 'Card' });
-        } catch (err) {
-            toast.error(editingId ? 'Matrix modification failed' : 'Upload rejected');
-        }
+            setShowForm(false);
+        } catch { toast.error('Something went wrong'); }
     };
 
     const executeDelete = async () => {
-        if (!selectedToDelete) return;
         try {
-            await axios.delete(`${API_BASE}/api/expenses/${selectedToDelete}`, { headers: { Authorization: `Bearer ${user.token}` } });
-            setExpenses(expenses.filter(e => e._id !== selectedToDelete));
-            toast.success('Data node permanently purged.');
-            setDeleteModalOpen(false);
-            setSelectedToDelete(null);
-        } catch (err) {
-            toast.error('Deletion error from external cluster');
-        }
+            await axios.delete(`${API_BASE}/api/expenses/${deleteModal.id}`, { headers: { Authorization: `Bearer ${user.token}` } });
+            setExpenses(expenses.filter(e => e._id !== deleteModal.id));
+            toast.success('Expense deleted');
+            setDeleteModal({ open: false, id: null });
+        } catch { toast.error('Failed to delete'); }
     };
 
-    const handleEditClick = (exp) => {
-        setEditingId(exp._id);
+    const handleEdit = (exp) => {
+        setEditingId(exp._id); setShowForm(true);
         setFormData({ title: exp.title, amount: exp.amount, category: exp.category, date: exp.date.split('T')[0], paymentMethod: exp.paymentMethod });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null); setShowForm(false);
+        setFormData({ title: '', amount: '', category: 'Food', date: '', paymentMethod: 'Card' });
     };
 
     const exportPDF = () => {
         html2canvas(tableRef.current).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
-            const imgProps = pdf.getImageProperties(imgData);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save("expenses_report.pdf");
-            toast.success("PDF Blueprint Generated!");
+            const w = pdf.internal.pageSize.getWidth();
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, (canvas.height * w) / canvas.width);
+            pdf.save('expenses.pdf'); toast.success('PDF saved!');
         });
-    }
+    };
 
-    const filtered = expenses.filter(e => {
-        return (filterCat === 'All' || e.category === filterCat) && e.title.toLowerCase().includes(search.toLowerCase());
-    }).sort((a, b) => {
-        if (sortBy === 'Latest') return new Date(b.date) - new Date(a.date);
-        if (sortBy === 'Highest') return b.amount - a.amount;
-        if (sortBy === 'Lowest') return a.amount - b.amount;
-        return 0;
-    });
+    const filtered = expenses
+        .filter(e => (filterCat === 'All' || e.category === filterCat) && e.title.toLowerCase().includes(search.toLowerCase()))
+        .sort((a, b) => {
+            if (sortBy === 'Latest') return new Date(b.date) - new Date(a.date);
+            if (sortBy === 'Highest') return b.amount - a.amount;
+            if (sortBy === 'Lowest') return a.amount - b.amount;
+            return 0;
+        });
 
-    if (loading) return <Spinner />;
+    const totalFiltered = filtered.reduce((s, e) => s + e.amount, 0);
+    const totalAll = expenses.reduce((s, e) => s + e.amount, 0);
+    const avgExpense = expenses.length > 0 ? totalAll / expenses.length : 0;
 
     return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-[1400px] mx-auto pb-10">
-            <div className="flex flex-col sm:flex-row justify-between items-center glass-panel p-6 sm:p-8 rounded-[2.5rem]">
+        <div className="space-y-4 max-w-[1400px] mx-auto">
+
+            {/* Header */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3 tracking-tight"><Sparkles className="text-indigo-500" size={28} />Expense Ledger</h1>
-                    <p className="text-slate-500 mt-2 dark:text-slate-400 font-medium">Quantify, search, and parse your outgoing cashflow matrix.</p>
+                    <h1 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <Receipt size={18} className="text-rose-500" /> Expenses
+                    </h1>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Manage and track what you spend</p>
                 </div>
-                <div className="flex flex-wrap gap-4 mt-6 sm:mt-0">
-                    <button onClick={exportPDF} className="px-5 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center gap-2 rounded-2xl transition-all font-bold tracking-wide shadow-sm">
-                        <Download size={18} /> PDF Log
+                <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={exportPDF} className="btn-ghost text-[12px] px-3 py-2">
+                        <Download size={13} /> PDF
                     </button>
                     {filtered.length > 0 && (
-                        <CSVLink data={filtered} filename="expenses_records.csv" className="px-5 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 flex items-center gap-2 rounded-2xl transition-all font-bold tracking-wide shadow-sm">
-                            <Download size={18} /> CSV Format
+                        <CSVLink data={filtered} filename="expenses.csv" className="btn-ghost text-[12px] px-3 py-2 flex items-center gap-1.5">
+                            <Download size={13} /> CSV
                         </CSVLink>
                     )}
+                    <button
+                        onClick={() => { setShowForm(f => !f); if (editingId) cancelEdit(); }}
+                        className="btn-danger text-[12px] px-3.5 py-2"
+                    >
+                        <Plus size={14} /> {showForm && !editingId ? 'Cancel' : 'Add Expense'}
+                    </button>
                 </div>
-            </div>
+            </motion.div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
-                <div className="xl:col-span-1 glass-card p-8 sm:p-10 rounded-[2.5rem] h-fit">
-                    <h2 className="text-xl font-black mb-8 text-slate-900 dark:text-white flex items-center gap-3">
-                        {editingId ? <><Edit2 className="text-indigo-500" size={24} /> Modify Entry</> : <><Plus className="text-indigo-500" size={24} /> Append Expense</>}
-                    </h2>
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-xs font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">Description Vector</label>
-                            <input type="text" placeholder="Server costs, Travel..." className="w-full p-4 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-bold placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-inner" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} required />
-                        </div>
-                        <div className="flex gap-4">
-                            <div className="flex-1">
-                                <label className="block text-xs font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">Cost Volume</label>
-                                <div className="relative">
-                                    <span className="absolute left-5 top-4 text-slate-500 font-extrabold pb-1">₹</span>
-                                    <input type="number" placeholder="0.00" className="w-full pl-11 p-4 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-black placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-inner text-lg" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required />
-                                </div>
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-xs font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">Timestamp</label>
-                                <input type="date" className="w-full p-4 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all font-bold shadow-inner" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
-                            </div>
-                        </div>
-                        <div className="flex gap-4">
-                            <div className="flex-1">
-                                <label className="block text-xs font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">Category Tag</label>
-                                <select className="w-full p-4 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold shadow-inner appearance-none" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-                                    <option>Food</option><option>Travel</option><option>Shopping</option><option>Bills</option><option>Entertainment</option><option>Health</option><option>Education</option><option>Others</option>
-                                </select>
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-xs font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">Protocol</label>
-                                <select className="w-full p-4 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold shadow-inner appearance-none" value={formData.paymentMethod} onChange={e => setFormData({ ...formData, paymentMethod: e.target.value })}>
-                                    <option>Card</option><option>Cash</option><option>Bank Transfer</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="pt-6 flex gap-4">
-                            <button type="submit" className="flex-1 bg-gradient-to-r from-rose-500 to-rose-600 text-white p-4 rounded-2xl shadow-[0_10px_20px_-5px_rgba(244,63,94,0.5)] font-black tracking-widest transition-all hover:-translate-y-1 uppercase text-sm">
-                                {editingId ? 'Save Changes' : 'Execute Expense'}
-                            </button>
-                            {editingId && <button type="button" onClick={() => { setEditingId(null); setFormData({ title: '', amount: '', category: 'Food', date: '', paymentMethod: 'Card' }); }} className="px-8 bg-slate-200/50 dark:bg-white/10 rounded-2xl text-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-white/20 transition-colors font-bold shadow-sm uppercase text-xs tracking-widest">Abort</button>}
-                        </div>
-                    </form>
-                </div>
-
-                <div className="xl:col-span-2 glass-panel p-6 sm:p-10 rounded-[2.5rem] flex flex-col min-h-[500px]">
-                    <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-                        <h2 className="text-xl font-black dark:text-white truncate lg:mr-auto tracking-tight">Encrypted Ledger</h2>
-                        <div className="flex flex-wrap gap-3 w-full sm:w-auto">
-                            <div className="relative flex-1 sm:flex-none">
-                                <Search className="absolute left-5 top-3.5 text-indigo-500 dark:text-indigo-400" size={18} />
-                                <input type="text" placeholder="Search parameters..." className="w-full sm:w-56 pl-12 p-3 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold placeholder-slate-400 dark:placeholder-slate-500 shadow-inner text-sm" value={search} onChange={e => setSearch(e.target.value)} />
-                            </div>
-                            <div className="relative">
-                                <Filter className="absolute left-5 top-3.5 text-indigo-500 dark:text-indigo-400" size={18} />
-                                <select className="pl-12 p-3 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold appearance-none min-w-[150px] shadow-inner text-sm" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
-                                    <option value="All">All Scope</option><option>Food</option><option>Travel</option><option>Shopping</option><option>Bills</option><option>Entertainment</option><option>Health</option><option>Education</option><option>Others</option>
-                                </select>
-                            </div>
-                            <select className="p-3 px-6 bg-white/50 dark:bg-[#080d1e]/80 border border-white/60 dark:border-indigo-500/20 dark:text-white rounded-2xl focus:ring-2 focus:ring-indigo-500 font-black cursor-pointer uppercase text-xs tracking-wider shadow-inner appearance-none" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                                <option>Latest</option><option>Highest</option><option>Lowest</option>
-                            </select>
-                        </div>
+            {/* Mini stat strip */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}
+                className="grid grid-cols-3 gap-3">
+                {[
+                    { label: 'Total Spent', value: formatCurrency(totalAll), color: 'text-rose-600 dark:text-rose-400' },
+                    { label: 'Records', value: expenses.length, color: 'text-violet-600 dark:text-violet-400' },
+                    { label: 'Avg. Expense', value: formatCurrency(avgExpense), color: 'text-amber-600 dark:text-amber-400' },
+                ].map(s => (
+                    <div key={s.label} className="card p-3.5 rounded-xl text-center card-hover">
+                        <p className={`text-[15px] font-bold ${s.color}`}>{s.value}</p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5 uppercase tracking-wide">{s.label}</p>
                     </div>
+                ))}
+            </motion.div>
 
-                    <div className="flex-1 overflow-x-auto rounded-3xl border border-slate-200/50 dark:border-white/10" ref={tableRef}>
-                        <table className="w-full text-left border-collapse min-w-[750px]">
-                            <thead>
-                                <tr className="bg-slate-200/50 dark:bg-white/5 border-b border-slate-200/50 dark:border-white/5 text-indigo-600 dark:text-indigo-400 text-xs font-black tracking-widest uppercase">
-                                    <th className="p-5 pl-6 rounded-tl-3xl">Timestamp</th>
-                                    <th className="p-5">Vector Title</th>
-                                    <th className="p-5">Category Tag</th>
-                                    <th className="p-5">Net Loss</th>
-                                    <th className="p-5 pr-6 text-center rounded-tr-3xl">Admin</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white/30 dark:bg-[#080d1e]/40 divide-y divide-slate-100/50 dark:divide-white/5">
-                                {filtered.map(exp => (
-                                    <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layoutId={exp._id} key={exp._id} className="hover:bg-white/60 dark:hover:bg-white/10 transition-colors group">
-                                        <td className="p-5 pl-6 text-slate-600 dark:text-slate-400 font-bold text-sm tracking-wide">{new Date(exp.date).toLocaleDateString('en-GB')}</td>
-                                        <td className="p-5 font-black text-slate-900 dark:text-white text-[15px]">{exp.title}</td>
-                                        <td className="p-5"><span className="bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm">{exp.category}</span></td>
-                                        <td className="p-5 text-rose-600 dark:text-rose-400 font-black text-[16px] glow-text-red">-{formatCurrency(exp.amount)}</td>
-                                        <td className="p-5 pr-6 text-center">
-                                            <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => handleEditClick(exp)} className="p-2.5 bg-white/50 dark:bg-white/5 border border-white/40 dark:border-white/10 text-indigo-500 hover:text-white hover:bg-indigo-500 dark:hover:bg-indigo-500 rounded-xl transition-all shadow-sm"><Edit2 size={16} /></button>
-                                                <button onClick={() => { setSelectedToDelete(exp._id); setDeleteModalOpen(true); }} className="p-2.5 bg-white/50 dark:bg-white/5 border border-white/40 dark:border-white/10 text-rose-500 hover:text-white hover:bg-rose-500 dark:hover:bg-rose-500 rounded-xl transition-all shadow-sm"><Trash2 size={16} /></button>
-                                            </div>
-                                        </td>
-                                    </motion.tr>
-                                ))}
-                                {filtered.length === 0 && (
-                                    <tr>
-                                        <td colSpan="5" className="p-20 text-center text-slate-400 dark:text-slate-500 flex flex-col items-center justify-center w-full">
-                                            <div className="bg-white/50 dark:bg-white/5 rounded-[2rem] p-6 mb-6 shadow-inner border border-white/50 dark:border-white/10"><Search size={48} className="text-indigo-400 opacity-50" /></div>
-                                            <p className="text-2xl font-black text-slate-700 dark:text-slate-300">0 Vectors Found</p>
-                                            <p className="mt-2 font-medium">Input initial expense nodes to populate internal grid.</p>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
+            {/* Add / Edit Form */}
             <AnimatePresence>
-                {deleteModalOpen && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 dark:bg-[#030712]/90 z-50 flex justify-center items-center p-4">
-                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="glass-panel p-10 rounded-[3rem] shadow-[0_30px_60px_-15px_rgba(244,63,94,0.3)] max-w-sm w-full border border-rose-500/30">
-                            <div className="w-24 h-24 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><Trash2 size={40} /></div>
-                            <h3 className="text-3xl font-black text-center mb-3 text-slate-900 dark:text-white tracking-tighter">Purge Data?</h3>
-                            <p className="text-center text-slate-600 dark:text-slate-400 mb-8 leading-relaxed font-bold">This command is irreversible. Confirm deletion of the encrypted ledger row.</p>
-                            <div className="flex gap-4">
-                                <button onClick={() => { setDeleteModalOpen(false); setSelectedToDelete(null); }} className="flex-1 py-4 bg-slate-200/50 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 dark:text-white rounded-2xl font-bold transition-colors shadow-sm tracking-widest uppercase text-xs">Abort</button>
-                                <button onClick={executeDelete} className="flex-1 py-4 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-2xl font-black shadow-[0_10px_20px_-5px_rgba(244,63,94,0.5)] transition-all hover:shadow-[0_15px_30px_-5px_rgba(244,63,94,0.6)] hover:-translate-y-1 uppercase text-xs tracking-widest">Execute</button>
+                {showForm && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                        <div className="card p-5 rounded-2xl border-l-4 border-rose-500">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-[13px] font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    {editingId ? <Edit2 size={14} className="text-rose-500" /> : <Plus size={14} className="text-rose-500" />}
+                                    {editingId ? 'Edit Expense' : 'New Expense'}
+                                </h2>
+                                <button onClick={cancelEdit} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                    <X size={15} />
+                                </button>
+                            </div>
+                            <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                <div className="lg:col-span-2">
+                                    <label className="form-label">Description</label>
+                                    <input type="text" placeholder="e.g. Lunch, Uber, Netflix…" className="form-input" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} required />
+                                </div>
+                                <div>
+                                    <label className="form-label">Amount (₹)</label>
+                                    <input type="number" placeholder="0.00" min="0" step="0.01" className="form-input" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required />
+                                </div>
+                                <div>
+                                    <label className="form-label">Date</label>
+                                    <input type="date" className="form-input" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
+                                </div>
+                                <div>
+                                    <label className="form-label">Category</label>
+                                    <select className="form-input" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
+                                        {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="form-label">Payment</label>
+                                    <select className="form-input" value={formData.paymentMethod} onChange={e => setFormData({ ...formData, paymentMethod: e.target.value })}>
+                                        {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-1">
+                                    <button type="submit" className="btn-danger flex-1">{editingId ? 'Save' : 'Add'}</button>
+                                    {editingId && <button type="button" onClick={cancelEdit} className="btn-ghost">Cancel</button>}
+                                </div>
+                            </form>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Table card */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card rounded-2xl overflow-hidden">
+                {/* Toolbar */}
+                <div className="flex flex-col sm:flex-row gap-2 p-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="relative flex-1 max-w-xs">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        <input type="text" placeholder="Search expenses…" className="form-input pl-8 py-2" value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={() => setShowFilters(f => !f)} className={`btn-ghost py-2 px-3 text-[12px] ${showFilters ? 'ring-2 ring-violet-400' : ''}`}>
+                            <SlidersHorizontal size={13} /> Filters
+                        </button>
+                        <select className="form-input py-2 min-w-[110px] text-[12px]" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                            <option>Latest</option><option>Highest</option><option>Lowest</option>
+                        </select>
+                        {filtered.length > 0 && (
+                            <div className="flex items-center gap-2 ml-auto text-[12px]">
+                                <span className="text-slate-400">{filtered.length} records</span>
+                                <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(totalFiltered)}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Filter row */}
+                <AnimatePresence>
+                    {showFilters && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                            className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex flex-wrap gap-2 overflow-hidden">
+                            {['All', ...CATEGORIES].map(c => (
+                                <button key={c} onClick={() => setFilterCat(c)}
+                                    className={`text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all ${filterCat === c ? 'bg-violet-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-violet-400'}`}>
+                                    {c}
+                                </button>
+                            ))}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Table */}
+                <div className="overflow-x-auto" ref={tableRef}>
+                    <table className="data-table min-w-[640px]">
+                        <thead>
+                            <tr>
+                                <th>Date</th><th>Description</th><th>Category</th><th>Payment</th><th>Amount</th>
+                                <th className="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                [0, 1, 2, 3, 4].map(i => <SkeletonRow key={i} />)
+                            ) : (
+                                <AnimatePresence>
+                                    {filtered.map((exp, idx) => (
+                                        <motion.tr key={exp._id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ delay: idx * 0.03 }} className="group">
+                                            <td className="text-slate-500 dark:text-slate-400 text-[12px] whitespace-nowrap font-medium">
+                                                {new Date(exp.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </td>
+                                            <td className="font-semibold text-slate-800 dark:text-white text-[13px]">{exp.title}</td>
+                                            <td><span className={`badge text-[11px] ${CAT_STYLES[exp.category] || CAT_STYLES.Others}`}>{exp.category}</span></td>
+                                            <td className="text-slate-400 dark:text-slate-500 text-[12px]">{exp.paymentMethod}</td>
+                                            <td className="font-bold text-rose-600 dark:text-rose-400 text-[13px]">−{formatCurrency(exp.amount)}</td>
+                                            <td>
+                                                <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => handleEdit(exp)} className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"><Edit2 size={13} /></button>
+                                                    <button onClick={() => setDeleteModal({ open: true, id: exp._id })} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"><Trash2 size={13} /></button>
+                                                </div>
+                                            </td>
+                                        </motion.tr>
+                                    ))}
+                                </AnimatePresence>
+                            )}
+                            {!loading && filtered.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="py-16 text-center">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center">
+                                                <TrendingDown size={22} className="text-slate-300 dark:text-slate-600" />
+                                            </div>
+                                            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">No expenses found</p>
+                                            <p className="text-xs text-slate-400 dark:text-slate-500">Try changing your search or filters</p>
+                                            <button onClick={() => setShowForm(true)} className="btn-danger text-xs px-4 py-2 mt-1">+ Add Expense</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </motion.div>
+
+            {/* Delete modal */}
+            <AnimatePresence>
+                {deleteModal.open && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <motion.div initial={{ scale: 0.9, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9 }}
+                            className="card p-7 rounded-2xl max-w-sm w-full text-center shadow-2xl">
+                            <div className="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <Trash2 size={20} className="text-rose-600 dark:text-rose-400" />
+                            </div>
+                            <h3 className="text-base font-bold text-slate-800 dark:text-white mb-1.5">Delete Expense?</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5 leading-relaxed">This action is permanent and cannot be undone.</p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setDeleteModal({ open: false, id: null })} className="btn-ghost flex-1 text-[13px]">Cancel</button>
+                                <button onClick={executeDelete} className="btn-danger flex-1 text-[13px]">Delete</button>
                             </div>
                         </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </div>
     );
 };
+
 export default Expenses;

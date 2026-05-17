@@ -1,6 +1,11 @@
 const Spinner = () => (
-    <div className="flex justify-center items-center h-48 w-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-100 dark:border-slate-800 border-t-primary-600 dark:border-t-primary-500"></div>
+    <div className="flex flex-col justify-center items-center h-64 w-full gap-3">
+        <div className="relative w-10 h-10">
+            <div className="absolute inset-0 rounded-full border-2 border-slate-200 dark:border-slate-700" />
+            <div className="absolute inset-0 rounded-full border-2 border-t-violet-600 dark:border-t-violet-500 animate-spin" />
+        </div>
+        <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Loading...</p>
     </div>
 );
+
 export default Spinner;
